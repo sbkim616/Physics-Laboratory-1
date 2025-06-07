@@ -1,0 +1,59 @@
+import numpy as np
+import scipy.signal as signal
+import matplotlib.pyplot as plt
+import soundfile as sf
+
+def frequency_lowering(signal_input, fs, loss_band=(2000, 4000), target_band=(800, 1200)):
+    """
+    손실된 고주파 대역 성분을 청취 가능한 저주파 대역으로 이동
+    """
+    f, t, Zxx = signal.stft(signal_input, fs=fs, nperseg=1024)
+    loss_idx = np.where((f >= loss_band[0]) & (f <= loss_band[1]))[0]
+    target_idx = np.where((f >= target_band[0]) & (f <= target_band[1]))[0]
+
+    loss_energy = np.copy(Zxx[loss_idx, :])
+    Zxx[loss_idx, :] = 0
+
+    min_len = min(len(loss_idx), len(target_idx))
+    Zxx[target_idx[:min_len], :] += loss_energy[:min_len, :]
+
+    _, processed_signal = signal.istft(Zxx, fs=fs)
+    return processed_signal
+
+def plot_spectrogram(signal_input, fs, title):
+    f, t, Sxx = signal.spectrogram(signal_input, fs=fs, nperseg=1024)
+    plt.figure(figsize=(10,6))
+    plt.pcolormesh(t, f, 10 * np.log10(Sxx), shading='gouraud')
+    plt.colorbar(label='Intensity [dB]')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [s]')
+    plt.title(title)
+    plt.ylim(0, fs//2)
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    # 오디오 파일 경로 (실제 말소리 WAV 파일)
+    input_path = 'C:/Users/bini1/Desktop/file/말소리.wav'
+
+    # 오디오 파일 읽기
+    signal_input, fs = sf.read(input_path)
+
+    # 스테레오인 경우 모노로 변환
+    if signal_input.ndim == 2:
+        signal_input = signal_input.mean(axis=1)
+
+    # 1) 원본 스펙트로그램
+    plot_spectrogram(signal_input, fs, 'Original Speech Signal Spectrogram')
+
+    # 2) 주파수 하강 처리 (4000~6000 Hz → 800~1200 Hz)
+    lowered_signal = frequency_lowering(signal_input, fs, loss_band=(2000,4000), target_band=(800,1200))
+
+    # 3) 처리 후 스펙트로그램
+    plot_spectrogram(lowered_signal, fs, 'Frequency Lowered Speech Signal Spectrogram')
+
+    # 4) 결과 저장 (필요시)
+    sf.write('3-1)lowered_speech.wav', lowered_signal, fs)
+
+if __name__ == "__main__":
+    main()
