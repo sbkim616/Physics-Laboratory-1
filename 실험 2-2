@@ -1,0 +1,59 @@
+import numpy as np
+import scipy.signal as signal
+import soundfile as sf
+import matplotlib.pyplot as plt
+from scipy.signal import butter, filtfilt
+
+def bandpass_filter(signal_input, fs, lowcut, highcut, order=4):
+    nyq = 0.5 * fs
+    b, a = butter(order, [lowcut / nyq, highcut / nyq], btype='band')
+    return filtfilt(b, a, signal_input)
+
+def frequency_shift(signal_input, fs, shift_hz):
+    t = np.arange(len(signal_input)) / fs
+    return np.real(signal_input * np.exp(-2j * np.pi * shift_hz * t))
+
+def apply_frequency_lowering(signal_input, fs):
+    # 1. 고역(5000Hz 주변)만 추출
+    highband = bandpass_filter(signal_input, fs, 4900, 5100)
+    
+    # 2. 주파수 하강 (5000 → 1000Hz: -4000Hz 시프팅)
+    shifted = frequency_shift(highband, fs, shift_hz=4000)
+
+    # 3. 원래 신호에서 고역 제거 (간단히 저역통과로)
+    lowpassed = bandpass_filter(signal_input, fs, 20, 4500)
+
+    # 4. 합성: 저역 원본 + 주파수 하강된 고역
+    return lowpassed + shifted
+
+def plot_spectrogram(signal_input, fs, title):
+    f, t, Sxx = signal.spectrogram(signal_input, fs=fs, nperseg=1024)
+    plt.figure(figsize=(10,6))
+    plt.pcolormesh(t, f, 10 * np.log10(Sxx), shading='gouraud')
+    plt.colorbar(label='Intensity [dB]')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [s]')
+    plt.title(title)
+    plt.ylim(0, fs // 2)
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    # 1. 오디오 파일 불러오기
+    filepath = 'C:/Users/bini1/Desktop/file/signal_5000Hz.wav'
+    signal_input, fs = sf.read(filepath)
+
+    # 2. 원본 시각화
+    plot_spectrogram(signal_input, fs, 'Original Signal')
+
+    # 3. 주파수 하강 처리
+    lowered_signal = apply_frequency_lowering(signal_input, fs)
+
+    # 4. 결과 시각화
+    plot_spectrogram(lowered_signal, fs, 'Frequency-Lowered Signal (e.g., 5000Hz → 1000Hz)')
+
+    # 5. 저장
+    sf.write('2-2)lowered_output.wav', lowered_signal, fs)
+
+if __name__ == "__main__":
+    main()
