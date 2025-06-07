@@ -1,0 +1,67 @@
+import numpy as np 
+import scipy.signal as signal
+import matplotlib.pyplot as plt
+import soundfile as sf
+from scipy.signal import butter, filtfilt, hilbert
+
+def bandpass_filter(signal_input, fs, lowcut, highcut, order=4):
+    nyq = 0.5 * fs
+    b, a = butter(order, [lowcut / nyq, highcut / nyq], btype='band')
+    return filtfilt(b, a, signal_input)
+
+def remove_band(signal_input, fs, lowcut, highcut):
+    """특정 주파수 대역 제거 (notch 형태)"""
+    nyq = 0.5 * fs
+    b, a = butter(4, [lowcut / nyq, highcut / nyq], btype='bandstop')
+    return filtfilt(b, a, signal_input)
+
+def hilbert_replace_band(signal_input, fs, loss_band=(2000, 4000), shift_to=(800, 1200)):
+    """
+    손실 대역을 하강 변조한 저주파로 대체
+    """
+    center_loss = np.mean(loss_band)
+    center_target = np.mean(shift_to)
+    shift_amount = center_loss - center_target
+
+    # 손실 대역 추출 및 하강 이동
+    band_filtered = bandpass_filter(signal_input, fs, loss_band[0], loss_band[1])
+    analytic_signal = hilbert(band_filtered)
+    t = np.arange(len(signal_input)) / fs
+    shifted = np.real(analytic_signal * np.exp(-2j * np.pi * shift_amount * t))
+
+    # 원본 신호에서 손실 대역 제거
+    removed = remove_band(signal_input, fs, loss_band[0], loss_band[1])
+
+    # 제거된 원본 + 이동된 성분 합성
+    return removed + shifted
+
+def plot_spectrogram(signal_input, fs, title):
+    f, t, Sxx = signal.spectrogram(signal_input, fs=fs, nperseg=1024)
+    plt.figure(figsize=(10,6))
+    plt.pcolormesh(t, f, 10 * np.log10(Sxx + 1e-10), shading='gouraud')
+    plt.colorbar(label='Intensity [dB]')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [s]')
+    plt.title(title)
+    plt.ylim(0, 10000)
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    input_path = 'C:/Users/bini1/Desktop/file/말소리.wav'
+    signal_input, fs = sf.read(input_path)
+
+    if signal_input.ndim == 2:
+        signal_input = signal_input.mean(axis=1)
+
+    plot_spectrogram(signal_input, fs, 'Original Speech Signal Spectrogram')
+
+    lowered = hilbert_replace_band(signal_input, fs, loss_band=(2000, 4000), shift_to=(800, 1200))
+    lowered = lowered / np.max(np.abs(lowered)) * 0.9
+
+    plot_spectrogram(lowered, fs, 'Frequency-Lowered with Replacement (Hilbert)')
+
+    sf.write('3-3_Hilbert_Replaced.wav', lowered, fs)
+
+if __name__ == "__main__":
+    main()
