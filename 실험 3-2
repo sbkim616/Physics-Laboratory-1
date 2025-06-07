@@ -1,0 +1,74 @@
+import numpy as np
+import scipy.signal as signal
+import matplotlib.pyplot as plt
+import soundfile as sf
+from scipy.signal import butter, filtfilt
+
+def bandpass_filter(signal_input, fs, lowcut, highcut, order=4):
+    nyq = 0.5 * fs
+    b, a = butter(order, [lowcut / nyq, highcut / nyq], btype='band')
+    return filtfilt(b, a, signal_input)
+
+def simple_frequency_shifting(signal_input, fs, loss_band=(2000, 4000), shift_to=(800, 1200)):
+    """
+    단순 코사인 곱을 통한 주파수 하강 처리 (이미지 주파수 생김)
+    """
+    center_loss = np.mean(loss_band)
+    center_target = np.mean(shift_to)
+    shift_amount = center_loss - center_target  # 얼마나 낮출지
+
+    # 1. 손실 대역 필터링
+    band_filtered = bandpass_filter(signal_input, fs, loss_band[0], loss_band[1])
+
+    # 2. 시간 벡터 생성
+    t = np.arange(len(signal_input)) / fs
+
+    # 3. 주파수 이동 (코사인 곱 → 두 개의 대칭 성분 생성됨)
+    shifted = band_filtered * np.cos(2 * np.pi * (-shift_amount) * t)
+
+    # 4. 원래 저주파 보존 신호 추출
+    preserved = bandpass_filter(signal_input, fs, 20, loss_band[0] - 100)  # 예: 20–1900Hz
+
+    # 5. 합성 후 정규화
+    output = preserved + shifted
+    output = output / np.max(np.abs(output)) * 0.9
+
+    return output
+
+def plot_spectrogram(signal_input, fs, title):
+    f, t, Sxx = signal.spectrogram(signal_input, fs=fs, nperseg=1024)
+    plt.figure(figsize=(10,6))
+    plt.pcolormesh(t, f, 10 * np.log10(Sxx + 1e-10), shading='gouraud')
+    plt.colorbar(label='Intensity [dB]')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [s]')
+    plt.title(title)
+    plt.ylim(0, 10000)  # 10kHz 이하만 시각화
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    # 오디오 파일 경로
+    input_path = 'C:/Users/bini1/Desktop/file/말소리.wav'
+
+    # 오디오 파일 읽기
+    signal_input, fs = sf.read(input_path)
+
+    # 스테레오 -> 모노 변환
+    if signal_input.ndim == 2:
+        signal_input = signal_input.mean(axis=1)
+
+    # 1) 원본 스펙트로그램
+    plot_spectrogram(signal_input, fs, 'Original Speech Signal Spectrogram')
+
+    # 2) 단순 주파수 시프팅 + 필터 방식 처리
+    lowered_signal = simple_frequency_shifting(signal_input, fs, loss_band=(2000, 4000), shift_to=(800, 1200))
+
+    # 3) 처리 후 스펙트로그램
+    plot_spectrogram(lowered_signal, fs, 'Simple Frequency Shifted Speech Spectrogram')
+
+    # 4) 결과 저장
+    sf.write('3-2)lowered_speech_shifted.wav', lowered_signal, fs)
+
+if __name__ == "__main__":
+    main()
