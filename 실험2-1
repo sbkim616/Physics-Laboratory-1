@@ -1,0 +1,48 @@
+import numpy as np
+import scipy.signal as signal
+import matplotlib.pyplot as plt
+import soundfile as sf
+
+def frequency_lowering(signal_input, fs, loss_band=(4900, 5100), target_band=(900, 1100)):
+    f, t, Zxx = signal.stft(signal_input, fs=fs, nperseg=1024)
+    loss_idx = np.where((f >= loss_band[0]) & (f <= loss_band[1]))[0]
+    target_idx = np.where((f >= target_band[0]) & (f <= target_band[1]))[0]
+
+    loss_energy = np.copy(Zxx[loss_idx, :])
+    Zxx[loss_idx, :] = 0
+
+    min_len = min(len(loss_idx), len(target_idx))
+    Zxx[target_idx[:min_len], :] += loss_energy[:min_len, :]
+
+    _, processed_signal = signal.istft(Zxx, fs=fs)
+    return processed_signal
+
+def plot_spectrogram(signal_input, fs, title):
+    f, t, Sxx = signal.spectrogram(signal_input, fs=fs, nperseg=1024)
+    plt.figure(figsize=(10,6))
+    plt.pcolormesh(t, f, 10 * np.log10(Sxx + 1e-10), shading='gouraud')  # log(0) 방지
+    plt.colorbar(label='Intensity [dB]')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [s]')
+    plt.title(title)
+    plt.ylim(0, fs//2)
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    filepath = 'C:/Users/bini1/Desktop/file/signal_5000Hz.wav'
+    mixed_signal, fs = sf.read(filepath)
+
+    if mixed_signal.ndim > 1:  # 다채널 방지
+        mixed_signal = mixed_signal[:, 0]
+
+    plot_spectrogram(mixed_signal, fs, 'Original 5000 Hz Tone Spectrogram')
+
+    lowered_tone = frequency_lowering(mixed_signal, fs)
+
+    plot_spectrogram(lowered_tone, fs, 'Frequency Lowered (5000Hz → 1000Hz) Tone Spectrogram')
+
+    sf.write('2-1)lowered_1000Hz_tone.wav', lowered_tone, fs)
+
+if __name__ == "__main__":
+    main()
