@@ -1,0 +1,99 @@
+import numpy as np
+import scipy.signal as signal
+import matplotlib.pyplot as plt
+import soundfile as sf  # 파일에서 오디오를 읽고 쓸 때 사용
+
+def plot_spectrogram(signal_input, fs, title):
+    f, t, Sxx = signal.spectrogram(signal_input, fs=fs, nperseg=1024)
+    plt.figure(figsize=(10, 6))
+    plt.pcolormesh(t, f, 10 * np.log10(Sxx + 1e-10), shading='gouraud')  # log(0) 방지
+    plt.colorbar(label='Intensity [dB]')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [s]')
+    plt.title(title)
+    plt.ylim(0, fs // 2)
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    # 1) 오디오 파일에서 신호 불러오기
+    filepath = 'C:/Users/bini1/Desktop/file/1000+5000.wav'  # <- 여기 경로를 원하는 파일명으로 바꾸세요
+    mixed_signal, fs = sf.read(filepath)
+
+    # 2) STFT 수행 (분리용)
+    f, t, Zxx = signal.stft(mixed_signal, fs=fs, nperseg=1024)
+
+    # 3) 분리할 주파수 인덱스 지정 (예: 1000Hz, 5000Hz)
+    idx_1000 = np.argmin(np.abs(f - 1000))
+    idx_5000 = np.argmin(np.abs(f - 5000))
+
+    # 4) 주파수 성분만 추출
+    Zxx_1000 = np.zeros_like(Zxx)
+    Zxx_5000 = np.zeros_like(Zxx)
+    Zxx_1000[idx_1000, :] = Zxx[idx_1000, :]
+    Zxx_5000[idx_5000, :] = Zxx[idx_5000, :]
+
+    # 5) iSTFT로 신호 복원
+    _, sig_1000_only = signal.istft(Zxx_1000, fs=fs)
+    _, sig_5000_only = signal.istft(Zxx_5000, fs=fs)
+
+    # 6) 결과 시각화
+    plot_spectrogram(mixed_signal, fs, 'Original Signal Spectrogram')
+    plot_spectrogram(sig_1000_only, fs, 'Separated 1000Hz Component')
+    plot_spectrogram(sig_5000_only, fs, 'Separated 5000Hz Component')
+
+    # 7) 분리된 신호 저장
+    sf.write('signal_1000Hz.wav', sig_1000_only, fs)
+    sf.write('signal_5000Hz.wav', sig_5000_only, fs)
+
+if __name__ == "__main__":
+    main()import numpy as np
+import scipy.signal as signal
+import matplotlib.pyplot as plt
+import soundfile as sf  # 파일에서 오디오를 읽고 쓸 때 사용
+
+def plot_spectrogram(signal_input, fs, title):
+    f, t, Sxx = signal.spectrogram(signal_input, fs=fs, nperseg=1024)
+    plt.figure(figsize=(10, 6))
+    plt.pcolormesh(t, f, 10 * np.log10(Sxx + 1e-10), shading='gouraud')  # log(0) 방지
+    plt.colorbar(label='Intensity [dB]')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [s]')
+    plt.title(title)
+    plt.ylim(0, fs // 2)
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    # 1) 오디오 파일에서 신호 불러오기
+    filepath = 'C:/Users/bini1/Desktop/file/1000+5000.wav'  # <- 여기 경로를 원하는 파일명으로 바꾸세요
+    mixed_signal, fs = sf.read(filepath)
+
+    # 2) STFT 수행 (분리용)
+    f, t, Zxx = signal.stft(mixed_signal, fs=fs, nperseg=1024)
+
+    # 3) 분리할 주파수 인덱스 지정 (예: 1000Hz, 5000Hz)
+    idx_1000 = np.argmin(np.abs(f - 1000))
+    idx_5000 = np.argmin(np.abs(f - 5000))
+
+    # 4) 주파수 성분만 추출
+    Zxx_1000 = np.zeros_like(Zxx)
+    Zxx_5000 = np.zeros_like(Zxx)
+    Zxx_1000[idx_1000, :] = Zxx[idx_1000, :]
+    Zxx_5000[idx_5000, :] = Zxx[idx_5000, :]
+
+    # 5) iSTFT로 신호 복원
+    _, sig_1000_only = signal.istft(Zxx_1000, fs=fs)
+    _, sig_5000_only = signal.istft(Zxx_5000, fs=fs)
+
+    # 6) 결과 시각화
+    plot_spectrogram(mixed_signal, fs, 'Original Signal Spectrogram')
+    plot_spectrogram(sig_1000_only, fs, 'Separated 1000Hz Component')
+    plot_spectrogram(sig_5000_only, fs, 'Separated 5000Hz Component')
+
+    # 7) 분리된 신호 저장
+    sf.write('signal_1000Hz.wav', sig_1000_only, fs)
+    sf.write('signal_5000Hz.wav', sig_5000_only, fs)
+
+if __name__ == "__main__":
+    main()
