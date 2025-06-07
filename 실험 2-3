@@ -1,0 +1,75 @@
+import numpy as np
+import scipy.signal as signal
+import soundfile as sf
+import matplotlib.pyplot as plt
+from scipy.signal import butter, filtfilt, hilbert
+
+def bandpass_filter(signal_input, fs, lowcut, highcut, order=4):
+    """
+    지정 대역만 통과시키는 밴드패스 필터
+    """
+    nyq = 0.5 * fs
+    if lowcut <= 0:
+        lowcut = 1  # 0 Hz 문제 방지
+    b, a = butter(order, [lowcut / nyq, highcut / nyq], btype='band')
+    return filtfilt(b, a, signal_input)
+
+def frequency_shift_hilbert(signal_input, fs, shift_hz):
+    """
+    힐버트 변환 기반 단측대역 주파수 시프트 (이미지 주파수 제거)
+    """
+    analytic_signal = hilbert(signal_input)
+    t = np.arange(len(signal_input)) / fs
+    shifted = analytic_signal * np.exp(1j * 2 * np.pi * shift_hz * t)
+    return np.real(shifted)
+
+def apply_frequency_lowering(signal_input, fs):
+    """
+    고주파(예: 5000Hz) → 저주파(예: 1000Hz) 하강 변환
+    """
+    # 1. 고역(5000Hz 주변)만 추출
+    highband = bandpass_filter(signal_input, fs, 4900, 5100)
+
+    # 2. 주파수 하강 (5000 → 1000Hz: -4000Hz 시프팅)
+    shifted = frequency_shift_hilbert(highband, fs, shift_hz=-4000)
+
+    # 3. 원본 신호에서 고역 제거 (대략적으로 20~4500Hz 유지)
+    lowpassed = bandpass_filter(signal_input, fs, 20, 4500)
+
+    # 4. 합성: 저역 원본 + 주파수 하강된 고역
+    return lowpassed + shifted
+
+def plot_spectrogram(signal_input, fs, title):
+    """
+    신호의 스펙트로그램 시각화
+    """
+    f, t, Sxx = signal.spectrogram(signal_input, fs=fs, nperseg=1024)
+    plt.figure(figsize=(10, 6))
+    plt.pcolormesh(t, f, 10 * np.log10(Sxx + 1e-10), shading='gouraud')  # log(0) 방지
+    plt.colorbar(label='Intensity [dB]')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [s]')
+    plt.title(title)
+    plt.ylim(0, fs // 2)
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    # 1. 오디오 파일 불러오기
+    filepath = 'C:/Users/bini1/Desktop/file/signal_5000Hz.wav'
+    signal_input, fs = sf.read(filepath)
+
+    # 2. 원본 시각화
+    plot_spectrogram(signal_input, fs, 'Original Signal')
+
+    # 3. 주파수 하강 처리
+    lowered_signal = apply_frequency_lowering(signal_input, fs)
+
+    # 4. 결과 시각화
+    plot_spectrogram(lowered_signal, fs, 'Frequency-Lowered Signal (5000Hz → 1000Hz)')
+
+    # 5. 저장
+    sf.write('2-3)lowered_output.wav', lowered_signal, fs)
+
+if __name__ == "__main__":
+    main()
